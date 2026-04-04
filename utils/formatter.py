@@ -121,3 +121,8 @@ def segments_to_llm_input(
         ts = format_timestamp(p.start, always_hours)
         lines.append(f"[{ts}] {p.text}")
     return "\n".join(lines)
+
+
+def segments_to_pure_text(paragraphs: list[TranscriptParagraph]) -> str:
+    """Pure text without any timestamps."""
+    return "\n\n".join(p.text for p in paragraphs)

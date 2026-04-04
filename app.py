@@ -27,76 +27,91 @@ def run_pipeline(url: str, model_size: str, language: str, progress=gr.Progress(
     """Main processing function wired to the Gradio UI.
 
     This is a generator that yields updates for each output component:
-    (status_text, transcript_md, summary_md, srt_file, txt_file, result_state)
+    (status, transcript_md, pure_text, learning_md, summary_md, srt_file, txt_file, result_state)
     """
+    empty = ("请输入视频链接", "", "", "", "", None, None, None, None)
     if not url.strip():
-        yield ("请输入视频链接", "", "", None, None, None)
+        yield empty
         return
 
     transcript_md = ""
+    pure_text = ""
+    learning_md = ""
     summary_md = ""
     result_obj = None
+
+    def _make_output(status):
+        return (
+            status,
+            transcript_md,
+            pure_text,
+            learning_md,
+            summary_md,
+            None,
+            None,
+            None,
+            result_obj,
+        )
 
     for event in process_video(url, model_size, language):
         if isinstance(event, PipelineProgress):
             progress(event.percent, desc=event.message)
 
-            # Update transcript and summary from progress events
             if event.transcript_md:
                 transcript_md = event.transcript_md
+            if event.pure_text:
+                pure_text = event.pure_text
+            if event.partial_learning:
+                learning_md = event.partial_learning
             if event.partial_summary:
                 summary_md = event.partial_summary
 
-            # Check if this is an error
             if "错误" in event.message or "失败" in event.message:
-                yield (
-                    f"**{event.message}**",
-                    transcript_md,
-                    summary_md,
-                    None,
-                    None,
-                    result_obj,
-                )
+                yield _make_output(f"**{event.message}**")
                 return
 
-            yield (
-                event.message,
-                transcript_md,
-                summary_md,
-                None,
-                None,
-                result_obj,
-            )
+            yield _make_output(event.message)
 
         elif isinstance(event, PipelineResult):
             result_obj = event
             transcript_md = event.transcript_markdown
+            pure_text = event.transcript_pure
+            learning_md = event.learning_transcript
             summary_md = event.summary
 
     if result_obj is None:
-        yield ("处理未完成", transcript_md, summary_md, None, None, None)
+        yield _make_output("处理未完成")
         return
 
     # Generate export files
     srt_file = None
     txt_file = None
+    learning_file = None
 
     if result_obj.transcript_srt:
         srt_path = Path(tempfile.mktemp(suffix=".srt"))
         srt_path.write_text(result_obj.transcript_srt, encoding="utf-8")
         srt_file = str(srt_path)
 
-    if result_obj.transcript_plain:
+    if result_obj.transcript_pure:
         txt_path = Path(tempfile.mktemp(suffix=".txt"))
-        txt_path.write_text(result_obj.transcript_plain, encoding="utf-8")
+        txt_path.write_text(result_obj.transcript_pure, encoding="utf-8")
         txt_file = str(txt_path)
+
+    if result_obj.learning_transcript:
+        learning_path = Path(tempfile.mktemp(suffix=".md"))
+        learning_path.write_text(result_obj.learning_transcript, encoding="utf-8")
+        learning_file = str(learning_path)
 
     yield (
         f"处理完成! 视频: {result_obj.title}",
         transcript_md,
+        pure_text,
+        learning_md,
         summary_md,
         srt_file,
         txt_file,
+        learning_file,
         result_obj,
     )
 
@@ -149,6 +164,16 @@ def build_ui() -> gr.Blocks:
                     value="",
                     elem_classes=["transcript-box"],
                 )
+            with gr.Tab("纯文字稿"):
+                pure_text_output = gr.Markdown(
+                    value="",
+                    elem_classes=["transcript-box"],
+                )
+            with gr.Tab("语言学习稿"):
+                learning_output = gr.Markdown(
+                    value="*非中文视频自动生成逐句翻译和核心词汇表*",
+                    elem_classes=["summary-box"],
+                )
             with gr.Tab("内容总结"):
                 summary_output = gr.Markdown(
                     value="",
@@ -158,37 +183,35 @@ def build_ui() -> gr.Blocks:
                 gr.Markdown("处理完成后可下载文件:")
                 with gr.Row():
                     srt_download = gr.File(label="SRT 字幕文件")
-                    txt_download = gr.File(label="TXT 文本文件")
+                    txt_download = gr.File(label="TXT 纯文字稿")
+                    learning_download = gr.File(label="语言学习稿 (Markdown)")
 
         # Hidden state to store full result
         result_state = gr.State(None)
+
+        outputs = [
+            status_text,
+            transcript_output,
+            pure_text_output,
+            learning_output,
+            summary_output,
+            srt_download,
+            txt_download,
+            learning_download,
+            result_state,
+        ]
 
         # --- Event Wiring ---
         submit_btn.click(
             fn=run_pipeline,
             inputs=[url_input, model_dropdown, lang_dropdown],
-            outputs=[
-                status_text,
-                transcript_output,
-                summary_output,
-                srt_download,
-                txt_download,
-                result_state,
-            ],
+            outputs=outputs,
         )
 
-        # Also trigger on Enter key
         url_input.submit(
             fn=run_pipeline,
             inputs=[url_input, model_dropdown, lang_dropdown],
-            outputs=[
-                status_text,
-                transcript_output,
-                summary_output,
-                srt_download,
-                txt_download,
-                result_state,
-            ],
+            outputs=outputs,
         )
 
     return demo

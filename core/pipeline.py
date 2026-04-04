@@ -4,7 +4,7 @@ from typing import Generator
 
 from core.downloader import download_audio, cleanup_audio, DownloadError
 from core.transcriber import transcribe
-from core.summarizer import summarize_stream, SummarizeError
+from core.summarizer import summarize_stream, learning_transcript_stream, SummarizeError
 from utils.url_parser import validate_url
 from utils.formatter import (
     TranscriptSegment,
@@ -13,6 +13,7 @@ from utils.formatter import (
     segments_to_srt,
     segments_to_plain_text,
     segments_to_llm_input,
+    segments_to_pure_text,
 )
 
 logger = logging.getLogger(__name__)
@@ -23,25 +24,40 @@ class PipelineResult:
     title: str = ""
     platform: str = ""
     duration: float = 0
+    detected_language: str = ""
     segments: list[TranscriptSegment] = field(default_factory=list)
     paragraphs: list[TranscriptParagraph] = field(default_factory=list)
     transcript_markdown: str = ""
     transcript_plain: str = ""
+    transcript_pure: str = ""
     transcript_srt: str = ""
     summary: str = ""
+    learning_transcript: str = ""
 
 
 @dataclass
 class PipelineProgress:
     percent: float  # 0.0 - 1.0
-    stage: str  # 'validate', 'download', 'transcribe', 'summarize'
+    stage: str  # 'validate', 'download', 'transcribe', 'learning', 'summarize'
     message: str
     transcript_md: str = ""
+    pure_text: str = ""
     partial_summary: str = ""
+    partial_learning: str = ""
 
 
 # Progress weight mapping: each stage's (start, end) as fractions of total
-STAGE_WEIGHTS = {
+# Non-Chinese: validate 0-2%, download 2-18%, transcribe 18-60%, learning 60-80%, summarize 80-100%
+# Chinese:     validate 0-2%, download 2-20%, transcribe 20-80%, summarize 80-100%
+STAGE_WEIGHTS_WITH_LEARNING = {
+    "validate": (0.0, 0.02),
+    "download": (0.02, 0.18),
+    "transcribe": (0.18, 0.60),
+    "learning": (0.60, 0.80),
+    "summarize": (0.80, 1.0),
+}
+
+STAGE_WEIGHTS_NO_LEARNING = {
     "validate": (0.0, 0.02),
     "download": (0.02, 0.20),
     "transcribe": (0.20, 0.80),
@@ -49,9 +65,9 @@ STAGE_WEIGHTS = {
 }
 
 
-def _map_progress(stage: str, local_pct: float) -> float:
+def _map_progress(stage: str, local_pct: float, weights: dict) -> float:
     """Map a stage's local progress (0-1) to global progress (0-1)."""
-    start, end = STAGE_WEIGHTS[stage]
+    start, end = weights[stage]
     return start + local_pct * (end - start)
 
 
@@ -67,11 +83,13 @@ def process_video(
     """
     result = PipelineResult()
     audio_path = None
+    # Start with no-learning weights; switch after language detection
+    weights = STAGE_WEIGHTS_NO_LEARNING
 
     try:
         # --- Stage 1: Validate URL ---
         yield PipelineProgress(
-            percent=_map_progress("validate", 0),
+            percent=_map_progress("validate", 0, weights),
             stage="validate",
             message="正在验证链接...",
         )
@@ -88,26 +106,23 @@ def process_video(
 
         result.platform = platform
         yield PipelineProgress(
-            percent=_map_progress("validate", 1.0),
+            percent=_map_progress("validate", 1.0, weights),
             stage="validate",
             message=f"识别为 {platform} 视频",
         )
 
         # --- Stage 2: Download audio ---
         yield PipelineProgress(
-            percent=_map_progress("download", 0),
+            percent=_map_progress("download", 0, weights),
             stage="download",
             message="正在下载音频...",
         )
-
-        def download_progress(pct, msg):
-            pass  # Progress is yielded from the generator, not a callback
 
         try:
             dl_result = download_audio(normalized_url, platform)
         except DownloadError as e:
             yield PipelineProgress(
-                percent=_map_progress("download", 0),
+                percent=_map_progress("download", 0, weights),
                 stage="download",
                 message=f"下载失败: {e}",
             )
@@ -118,14 +133,14 @@ def process_video(
         result.duration = dl_result.duration
 
         yield PipelineProgress(
-            percent=_map_progress("download", 1.0),
+            percent=_map_progress("download", 1.0, weights),
             stage="download",
             message=f"下载完成: {result.title}",
         )
 
         # --- Stage 3: Transcribe ---
         yield PipelineProgress(
-            percent=_map_progress("transcribe", 0),
+            percent=_map_progress("transcribe", 0, weights),
             stage="transcribe",
             message="正在加载语音识别模型...",
         )
@@ -134,12 +149,12 @@ def process_video(
 
         def transcribe_progress(pct, msg):
             progress_events.append(PipelineProgress(
-                percent=_map_progress("transcribe", pct),
+                percent=_map_progress("transcribe", pct, weights),
                 stage="transcribe",
                 message=msg,
             ))
 
-        segments, paragraphs = transcribe(
+        segments, paragraphs, detected_lang = transcribe(
             audio_path=audio_path,
             language=language,
             model_size=model_size,
@@ -149,25 +164,72 @@ def process_video(
 
         result.segments = segments
         result.paragraphs = paragraphs
+        result.detected_language = detected_lang
 
         always_hours = result.duration >= 3600
         result.transcript_markdown = segments_to_markdown(paragraphs, always_hours)
         result.transcript_plain = segments_to_plain_text(paragraphs, always_hours)
+        result.transcript_pure = segments_to_pure_text(paragraphs)
         result.transcript_srt = segments_to_srt(segments)
 
         yield PipelineProgress(
-            percent=_map_progress("transcribe", 1.0),
+            percent=_map_progress("transcribe", 1.0, weights),
             stage="transcribe",
             message=f"转录完成: {len(segments)} 个片段, {len(paragraphs)} 个段落",
             transcript_md=result.transcript_markdown,
+            pure_text=result.transcript_pure,
         )
+
+        # --- Determine detected language and adjust weights ---
+        is_non_chinese = result.detected_language != "zh"
+
+        if is_non_chinese:
+            weights = STAGE_WEIGHTS_WITH_LEARNING
+
+        # --- Stage 3.5: Learning Transcript (non-Chinese only) ---
+        if is_non_chinese:
+            yield PipelineProgress(
+                percent=_map_progress("learning", 0, weights),
+                stage="learning",
+                message="正在生成语言学习稿...",
+                transcript_md=result.transcript_markdown,
+                pure_text=result.transcript_pure,
+            )
+
+            learning_parts = []
+            try:
+                for chunk in learning_transcript_stream(result.transcript_pure, detected_lang):
+                    learning_parts.append(chunk)
+                    result.learning_transcript = "".join(learning_parts)
+                    yield PipelineProgress(
+                        percent=_map_progress("learning", 0.5, weights),
+                        stage="learning",
+                        message="正在生成学习稿...",
+                        transcript_md=result.transcript_markdown,
+                        pure_text=result.transcript_pure,
+                        partial_learning=result.learning_transcript,
+                    )
+            except SummarizeError as e:
+                logger.error("学习稿生成失败: %s", e)
+                result.learning_transcript = f"学习稿生成失败: {e}"
+
+            yield PipelineProgress(
+                percent=_map_progress("learning", 1.0, weights),
+                stage="learning",
+                message="学习稿生成完成",
+                transcript_md=result.transcript_markdown,
+                pure_text=result.transcript_pure,
+                partial_learning=result.learning_transcript,
+            )
 
         # --- Stage 4: Summarize ---
         yield PipelineProgress(
-            percent=_map_progress("summarize", 0),
+            percent=_map_progress("summarize", 0, weights),
             stage="summarize",
             message="正在生成内容总结...",
             transcript_md=result.transcript_markdown,
+            pure_text=result.transcript_pure,
+            partial_learning=result.learning_transcript,
         )
 
         llm_input = segments_to_llm_input(paragraphs, always_hours)
@@ -178,21 +240,25 @@ def process_video(
                 summary_parts.append(chunk)
                 result.summary = "".join(summary_parts)
                 yield PipelineProgress(
-                    percent=_map_progress("summarize", 0.5),
+                    percent=_map_progress("summarize", 0.5, weights),
                     stage="summarize",
                     message="正在生成总结...",
                     transcript_md=result.transcript_markdown,
+                    pure_text=result.transcript_pure,
                     partial_summary=result.summary,
+                    partial_learning=result.learning_transcript,
                 )
         except SummarizeError as e:
             logger.error("总结失败: %s", e)
             result.summary = f"总结生成失败: {e}"
             yield PipelineProgress(
-                percent=_map_progress("summarize", 1.0),
+                percent=_map_progress("summarize", 1.0, weights),
                 stage="summarize",
                 message=f"总结失败: {e}",
                 transcript_md=result.transcript_markdown,
+                pure_text=result.transcript_pure,
                 partial_summary=result.summary,
+                partial_learning=result.learning_transcript,
             )
 
         yield PipelineProgress(

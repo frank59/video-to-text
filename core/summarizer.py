@@ -10,6 +10,11 @@ from prompts.summarize import (
     CHUNK_SUMMARIZE_TEMPLATE,
     MERGE_SUMMARY_TEMPLATE,
 )
+from prompts.learning import (
+    LEARNING_SYSTEM_PROMPT,
+    LEARNING_TRANSCRIPT_TEMPLATE,
+    get_language_name,
+)
 
 logger = logging.getLogger(__name__)
 
@@ -112,3 +117,19 @@ def summarize_stream(transcript: str) -> Generator[str, None, None]:
         combined = "\n\n".join(chunk_summaries)
         user_prompt = MERGE_SUMMARY_TEMPLATE.format(chunk_summaries=combined)
         yield from _call_stream(SYSTEM_PROMPT, user_prompt)
+
+
+def learning_transcript_stream(
+    transcript: str,
+    source_language: str,
+) -> Generator[str, None, None]:
+    """Generate a language learning transcript with sentence-by-sentence translation.
+
+    Yields partial text as it arrives from the LLM.
+    """
+    lang_name = get_language_name(source_language)
+    user_prompt = LEARNING_TRANSCRIPT_TEMPLATE.format(
+        source_language=lang_name,
+        transcript=transcript,
+    )
+    yield from _call_stream(LEARNING_SYSTEM_PROMPT, user_prompt)

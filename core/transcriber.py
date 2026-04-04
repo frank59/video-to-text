@@ -53,7 +53,7 @@ def transcribe(
     model_size: str | None = None,
     total_duration: float = 0,
     progress_callback: Callable[[float, str], None] | None = None,
-) -> tuple[list[TranscriptSegment], list[TranscriptParagraph]]:
+) -> tuple[list[TranscriptSegment], list[TranscriptParagraph], str]:
     """Transcribe audio file to text with timestamps.
 
     Args:
@@ -64,7 +64,7 @@ def transcribe(
         progress_callback: Optional callback(percent: 0-1, message: str).
 
     Returns:
-        (segments, paragraphs) tuple.
+        (segments, paragraphs, detected_language) tuple.
     """
     model = get_model(model_size)
 
@@ -103,4 +103,4 @@ def transcribe(
     always_hours = total_duration >= 3600
     paragraphs = group_segments_into_paragraphs(segments)
 
-    return segments, paragraphs
+    return segments, paragraphs, detected_lang
