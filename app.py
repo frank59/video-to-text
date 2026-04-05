@@ -1,4 +1,5 @@
 import logging
+import re
 import tempfile
 from pathlib import Path
 
@@ -23,13 +24,20 @@ LANGUAGE_CHOICES = [
 ]
 
 
+def _safe_filename(title: str) -> str:
+    """Sanitize video title for use as filename, replacing special characters with '_'."""
+    name = re.sub(r'[\\/:*?"<>|\x00-\x1f]', '_', title)
+    name = name.strip('. ')
+    return name or "video"
+
+
 def run_pipeline(url: str, model_size: str, language: str, progress=gr.Progress()):
     """Main processing function wired to the Gradio UI.
 
     This is a generator that yields updates for each output component:
     (status, transcript_md, pure_text, learning_md, summary_md, srt_file, txt_file, result_state)
     """
-    empty = ("请输入视频链接", "", "", "", "", None, None, None, None)
+    empty = ("请输入视频链接", "", "", "", "", None, None, None, None, None)
     if not url.strip():
         yield empty
         return
@@ -47,6 +55,7 @@ def run_pipeline(url: str, model_size: str, language: str, progress=gr.Progress(
             pure_text,
             learning_md,
             summary_md,
+            None,
             None,
             None,
             None,
@@ -83,25 +92,34 @@ def run_pipeline(url: str, model_size: str, language: str, progress=gr.Progress(
         yield _make_output("处理未完成")
         return
 
-    # Generate export files
+    # Generate export files with video title as filename
     srt_file = None
     txt_file = None
     learning_file = None
+    summary_file = None
+
+    safe_name = _safe_filename(result_obj.title)
+    export_dir = Path(tempfile.mkdtemp())
 
     if result_obj.transcript_srt:
-        srt_path = Path(tempfile.mktemp(suffix=".srt"))
+        srt_path = export_dir / f"{safe_name}.srt"
         srt_path.write_text(result_obj.transcript_srt, encoding="utf-8")
         srt_file = str(srt_path)
 
     if result_obj.transcript_pure:
-        txt_path = Path(tempfile.mktemp(suffix=".txt"))
+        txt_path = export_dir / f"{safe_name}.txt"
         txt_path.write_text(result_obj.transcript_pure, encoding="utf-8")
         txt_file = str(txt_path)
 
     if result_obj.learning_transcript:
-        learning_path = Path(tempfile.mktemp(suffix=".md"))
+        learning_path = export_dir / f"{safe_name}_学习稿.md"
         learning_path.write_text(result_obj.learning_transcript, encoding="utf-8")
         learning_file = str(learning_path)
+
+    if result_obj.summary:
+        summary_path = export_dir / f"{safe_name}_总结.md"
+        summary_path.write_text(result_obj.summary, encoding="utf-8")
+        summary_file = str(summary_path)
 
     yield (
         f"处理完成! 视频: {result_obj.title}",
@@ -112,6 +130,7 @@ def run_pipeline(url: str, model_size: str, language: str, progress=gr.Progress(
         srt_file,
         txt_file,
         learning_file,
+        summary_file,
         result_obj,
     )
 
@@ -184,7 +203,9 @@ def build_ui() -> gr.Blocks:
                 with gr.Row():
                     srt_download = gr.File(label="SRT 字幕文件")
                     txt_download = gr.File(label="TXT 纯文字稿")
+                with gr.Row():
                     learning_download = gr.File(label="语言学习稿 (Markdown)")
+                    summary_download = gr.File(label="内容总结 (Markdown)")
 
         # Hidden state to store full result
         result_state = gr.State(None)
@@ -198,6 +219,7 @@ def build_ui() -> gr.Blocks:
             srt_download,
             txt_download,
             learning_download,
+            summary_download,
             result_state,
         ]
 
