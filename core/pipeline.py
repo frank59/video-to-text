@@ -15,12 +15,14 @@ from utils.formatter import (
     segments_to_llm_input,
     segments_to_pure_text,
 )
+from utils.snowflake import generate_id
 
 logger = logging.getLogger(__name__)
 
 
 @dataclass
 class PipelineResult:
+    task_id: str = ""
     title: str = ""
     platform: str = ""
     duration: float = 0
@@ -81,7 +83,7 @@ def process_video(
     Yields PipelineProgress events during processing,
     and a final PipelineResult when complete.
     """
-    result = PipelineResult()
+    result = PipelineResult(task_id=str(generate_id()))
     audio_path = None
     # Start with no-learning weights; switch after language detection
     weights = STAGE_WEIGHTS_NO_LEARNING

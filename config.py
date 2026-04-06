@@ -28,6 +28,7 @@ WHISPER_DEVICE = os.getenv("WHISPER_DEVICE", "cpu")
 # Paths
 AUDIO_OUTPUT_DIR = BASE_DIR / "data" / "audio"
 WHISPER_CACHE_DIR = BASE_DIR / "data" / "cache"
+OUTPUT_DIR = Path(os.getenv("OUTPUT_DIR", str(BASE_DIR / "output")))
 
 # Limits
 MAX_VIDEO_DURATION = int(os.getenv("MAX_VIDEO_DURATION", "14400"))
@@ -35,3 +36,4 @@ MAX_VIDEO_DURATION = int(os.getenv("MAX_VIDEO_DURATION", "14400"))
 # Ensure directories exist
 AUDIO_OUTPUT_DIR.mkdir(parents=True, exist_ok=True)
 WHISPER_CACHE_DIR.mkdir(parents=True, exist_ok=True)
+OUTPUT_DIR.mkdir(parents=True, exist_ok=True)

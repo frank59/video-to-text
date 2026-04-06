@@ -2,6 +2,7 @@ import logging
 from typing import Callable
 
 from faster_whisper import WhisperModel
+from opencc import OpenCC
 
 import config
 from utils.formatter import TranscriptSegment, TranscriptParagraph, group_segments_into_paragraphs
@@ -9,6 +10,7 @@ from utils.formatter import TranscriptSegment, TranscriptParagraph, group_segmen
 logger = logging.getLogger(__name__)
 
 _model: WhisperModel | None = None
+_t2s = OpenCC('t2s')  # Traditional to Simplified Chinese converter
 
 
 def get_model(
@@ -87,11 +89,16 @@ def transcribe(
         total_duration = info.duration or 1.0
 
     segments: list[TranscriptSegment] = []
+    need_t2s = detected_lang == "zh"
+    if need_t2s:
+        logger.info("检测到中文，将自动繁体转简体")
+
     for seg in result_segments:
+        text = _t2s.convert(seg.text) if need_t2s else seg.text
         segments.append(TranscriptSegment(
             start=seg.start,
             end=seg.end,
-            text=seg.text,
+            text=text,
         ))
 
         if progress_callback and total_duration > 0:

@@ -3,6 +3,7 @@
 .env
 .qoder/
 data/audio/
+output/
 __pycache__/
 *.pyc
 *.pyo

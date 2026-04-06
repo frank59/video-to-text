@@ -1,3 +1,4 @@
+import re
 from dataclasses import dataclass
 
 
@@ -126,3 +127,10 @@ def segments_to_llm_input(
 def segments_to_pure_text(paragraphs: list[TranscriptParagraph]) -> str:
     """Pure text without any timestamps."""
     return "\n\n".join(p.text for p in paragraphs)
+
+
+def safe_filename(title: str) -> str:
+    """Sanitize video title for use as filename, replacing special characters with '_'."""
+    name = re.sub(r'[\\/:*?"<>|\x00-\x1f]', '_', title)
+    name = name.strip('. ')
+    return name or "video"

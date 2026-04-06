@@ -1,11 +1,9 @@
 import logging
-import re
-import tempfile
-from pathlib import Path
 
 import gradio as gr
 
 from core.pipeline import process_video, PipelineProgress, PipelineResult
+from utils.storage import save_task_output
 import config
 
 logging.basicConfig(
@@ -22,13 +20,6 @@ LANGUAGE_CHOICES = [
     ("日文", "ja"),
     ("韩文", "ko"),
 ]
-
-
-def _safe_filename(title: str) -> str:
-    """Sanitize video title for use as filename, replacing special characters with '_'."""
-    name = re.sub(r'[\\/:*?"<>|\x00-\x1f]', '_', title)
-    name = name.strip('. ')
-    return name or "video"
 
 
 def run_pipeline(url: str, model_size: str, language: str, progress=gr.Progress()):
@@ -92,37 +83,16 @@ def run_pipeline(url: str, model_size: str, language: str, progress=gr.Progress(
         yield _make_output("处理未完成")
         return
 
-    # Generate export files with video title as filename
-    srt_file = None
-    txt_file = None
-    learning_file = None
-    summary_file = None
+    # Save task output to persistent directory and use paths for download
+    paths = save_task_output(result_obj)
 
-    safe_name = _safe_filename(result_obj.title)
-    export_dir = Path(tempfile.mkdtemp())
-
-    if result_obj.transcript_srt:
-        srt_path = export_dir / f"{safe_name}.srt"
-        srt_path.write_text(result_obj.transcript_srt, encoding="utf-8")
-        srt_file = str(srt_path)
-
-    if result_obj.transcript_pure:
-        txt_path = export_dir / f"{safe_name}.txt"
-        txt_path.write_text(result_obj.transcript_pure, encoding="utf-8")
-        txt_file = str(txt_path)
-
-    if result_obj.learning_transcript:
-        learning_path = export_dir / f"{safe_name}_学习稿.md"
-        learning_path.write_text(result_obj.learning_transcript, encoding="utf-8")
-        learning_file = str(learning_path)
-
-    if result_obj.summary:
-        summary_path = export_dir / f"{safe_name}_总结.md"
-        summary_path.write_text(result_obj.summary, encoding="utf-8")
-        summary_file = str(summary_path)
+    srt_file = str(paths.transcript_srt) if paths.transcript_srt else None
+    txt_file = str(paths.transcript_txt) if paths.transcript_txt else None
+    learning_file = str(paths.learning_md) if paths.learning_md else None
+    summary_file = str(paths.summary_md) if paths.summary_md else None
 
     yield (
-        f"处理完成! 视频: {result_obj.title}",
+        f"处理完成! 视频: {result_obj.title} (任务 ID: {result_obj.task_id})",
         transcript_md,
         pure_text,
         learning_md,
