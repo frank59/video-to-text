@@ -12,6 +12,11 @@ logging.basicConfig(
 )
 logger = logging.getLogger(__name__)
 
+if config.COOKIES_FILE:
+    logger.info("Cookies 文件已加载: %s", config.COOKIES_FILE)
+elif config.COOKIES_FILE_CONFIGURED:
+    logger.warning("COOKIES_FILE 指定的文件不存在，将不使用 cookies")
+
 MODEL_CHOICES = ["tiny", "base", "small", "medium", "large-v3"]
 LANGUAGE_CHOICES = [
     ("自动检测", "auto"),

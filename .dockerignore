@@ -2,6 +2,7 @@
 .gitignore
 .env
 .qoder/
+cookies.txt
 data/audio/
 output/
 __pycache__/

@@ -33,6 +33,17 @@ OUTPUT_DIR = Path(os.getenv("OUTPUT_DIR", str(BASE_DIR / "output")))
 # Limits
 MAX_VIDEO_DURATION = int(os.getenv("MAX_VIDEO_DURATION", "14400"))
 
+# Cookies file for yt-dlp (Netscape format)
+_cookies_file_env = os.getenv("COOKIES_FILE", "")
+if _cookies_file_env:
+    _cookies_path = Path(_cookies_file_env)
+    if not _cookies_path.is_absolute():
+        _cookies_path = BASE_DIR / _cookies_path
+else:
+    _cookies_path = BASE_DIR / "cookies.txt"
+COOKIES_FILE: Path | None = _cookies_path if _cookies_path.is_file() else None
+COOKIES_FILE_CONFIGURED = bool(_cookies_file_env)
+
 # Ensure directories exist
 AUDIO_OUTPUT_DIR.mkdir(parents=True, exist_ok=True)
 WHISPER_CACHE_DIR.mkdir(parents=True, exist_ok=True)

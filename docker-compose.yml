@@ -12,4 +12,7 @@ services:
       - DASHSCOPE_BASE_URL=${DASHSCOPE_BASE_URL:-https://coding.dashscope.aliyuncs.com/v1}
       - DASHSCOPE_MODEL=${DASHSCOPE_MODEL:-qwen3.5-plus}
       - WHISPER_MODEL_SIZE=${WHISPER_MODEL_SIZE:-medium}
+      - COOKIES_FILE=/app/cookies.txt
+    volumes:
+      - ./cookies.txt:/app/cookies.txt:ro
     restart: unless-stopped
