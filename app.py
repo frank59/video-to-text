@@ -1,4 +1,5 @@
 import logging
+from pathlib import Path
 
 import gradio as gr
 
@@ -214,12 +215,85 @@ def build_ui() -> gr.Blocks:
     return demo
 
 
-if __name__ == "__main__":
-    demo = build_ui()
-    demo.queue()
-    demo.launch(
-        server_name="0.0.0.0",
-        server_port=7860,
-        theme=gr.themes.Soft(),
-        css=CUSTOM_CSS,
+def parse_cli_args():
+    """Parse command line arguments. Returns (url, model, language, output_dir, api_key)."""
+    import argparse
+
+    parser = argparse.ArgumentParser(
+        description="视频转文字工具",
+        formatter_class=argparse.RawDescriptionHelpFormatter,
     )
+    parser.add_argument(
+        "url",
+        nargs="?",
+        default=None,
+        help="视频链接 (抖音/B站/YouTube)，不提供则启动 Web 界面",
+    )
+    parser.add_argument(
+        "--model",
+        default=config.WHISPER_MODEL_SIZE,
+        choices=MODEL_CHOICES,
+        help=f"Whisper 模型大小 (默认: {config.WHISPER_MODEL_SIZE})",
+    )
+    parser.add_argument(
+        "--language",
+        default="auto",
+        help="语言代码: auto, zh, en, ja, ko (默认: auto)",
+    )
+    parser.add_argument(
+        "--output-dir",
+        type=Path,
+        default=None,
+        help="输出目录 (默认: output/<task_id>/)",
+    )
+    parser.add_argument(
+        "--api-key",
+        default=None,
+        help="覆盖 DASHSCOPE_API_KEY 环境变量",
+    )
+    return parser.parse_args()
+
+
+def run_cli(url: str, model_size: str, language: str, output_dir: Path | None):
+    """Run video processing in CLI mode."""
+    for event in process_video(url, model_size, language):
+        if isinstance(event, PipelineProgress):
+            pct = int(event.percent * 100)
+            print(f"[{pct:3d}%] {event.message}")
+        elif isinstance(event, PipelineResult):
+            print(f"\n处理完成: {event.title}")
+            print(f"任务 ID: {event.task_id}")
+            paths = save_task_output(event, output_dir=output_dir)
+            print("\n输出文件:")
+            for name, path in [
+                ("  文字稿 (Markdown)", paths.transcript_md),
+                ("  纯文字稿 (TXT)", paths.transcript_txt),
+                ("  字幕文件 (SRT)", paths.transcript_srt),
+                ("  语言学习稿", paths.learning_md),
+                ("  内容总结", paths.summary_md),
+            ]:
+                if path:
+                    print(f"    {name}: {path}")
+
+
+if __name__ == "__main__":
+    args = parse_cli_args()
+
+    if args.url:
+        # CLI mode
+        import os
+
+        if args.api_key:
+            os.environ["DASHSCOPE_API_KEY"] = args.api_key
+
+        run_cli(args.url, args.model, args.language, args.output_dir)
+    else:
+        # Web mode
+        demo = build_ui()
+        demo.queue()
+        demo.launch(
+            server_name="0.0.0.0",
+            server_port=7860,
+            theme=gr.themes.Soft(),
+            css=CUSTOM_CSS,
+        )
