@@ -230,16 +230,58 @@ spec:
 
 ## 输出文件
 
-任务完成后，输出文件保存在 `--output-dir` 指定的目录（默认 `/app/output`）：
+任务完成后，输出文件保存在 `--output-dir/<job_id>/` 目录下：
 
 ```
-output/<task_id>/
+output/<job_id>/
+├── progress.json          # 任务进度快照（状态跟踪文件）
 ├── <视频标题>.md          # 文字稿 (Markdown)
 ├── <视频标题>.txt         # 纯文字稿
 ├── <视频标题>.srt         # SRT 字幕
 ├── <视频标题>_学习稿.md   # 语言学习稿 (非中文视频)
 └── <视频标题>_总结.md    # AI 总结
 ```
+
+### progress.json 结构
+
+调用者可以通过读取 `progress.json` 获取任务状态和输出文件路径：
+
+```json
+{
+  "task_id": "300255322163904512",
+  "job_id": "spring-boot-job-123",
+  "status": "completed",
+  "stage": "summarize",
+  "percent": 100,
+  "message": "处理完成!",
+  "platform": "bilibili",
+  "title": "视频标题",
+  "duration": 734.3,
+  "detected_language": "zh",
+  "error": null,
+  "created_at": "2026-04-08T21:07:29",
+  "updated_at": "2026-04-08T21:15:00",
+  "output_files": {
+    "transcript_md": "/app/output/spring-boot-job-123/视频标题.md",
+    "transcript_txt": "/app/output/spring-boot-job-123/视频标题.txt",
+    "transcript_srt": "/app/output/spring-boot-job-123/视频标题.srt",
+    "learning_md": null,
+    "summary_md": "/app/output/spring-boot-job-123/视频标题_总结.md"
+  }
+}
+```
+
+**status 字段取值：**
+| 值 | 说明 |
+|----|------|
+| `pending` | 等待处理 |
+| `validating` | 验证 URL |
+| `downloading` | 下载音视频 |
+| `transcribing` | 转录中 |
+| `learning` | 生成语言学习稿（非中文视频） |
+| `summarizing` | 生成 AI 总结 |
+| `completed` | 任务完成 |
+| `failed` | 任务失败（含 error 字段） |
 
 **注意**：k8s Job 执行完毕后容器会被删除，**必须**通过 Volume 挂载将输出文件持久化到宿主机或 NFS。
 

@@ -1,5 +1,7 @@
+import json
 import logging
 from dataclasses import dataclass
+from datetime import datetime
 from pathlib import Path
 
 import config
@@ -16,6 +18,25 @@ class TaskOutputPaths:
     transcript_srt: Path | None = None
     learning_md: Path | None = None
     summary_md: Path | None = None
+
+
+def _update_progress_with_output(task_dir: Path, paths: TaskOutputPaths):
+    """Update progress.json with output file paths."""
+    progress_file = task_dir / "progress.json"
+    if progress_file.exists():
+        try:
+            data = json.loads(progress_file.read_text(encoding="utf-8"))
+            data["output_files"] = {
+                "transcript_md": str(paths.transcript_md) if paths.transcript_md else None,
+                "transcript_txt": str(paths.transcript_txt) if paths.transcript_txt else None,
+                "transcript_srt": str(paths.transcript_srt) if paths.transcript_srt else None,
+                "learning_md": str(paths.learning_md) if paths.learning_md else None,
+                "summary_md": str(paths.summary_md) if paths.summary_md else None,
+            }
+            data["updated_at"] = datetime.now().isoformat()
+            progress_file.write_text(json.dumps(data, ensure_ascii=False, indent=2), encoding="utf-8")
+        except Exception as e:
+            logger.warning("更新 progress.json 失败: %s", e)
 
 
 def save_task_output(result, output_dir: Path | None = None, job_id: str | None = None) -> TaskOutputPaths:
@@ -62,4 +83,8 @@ def save_task_output(result, output_dir: Path | None = None, job_id: str | None 
         paths.summary_md = p
 
     logger.info("任务结果已保存到: %s", task_dir)
+
+    # Update progress.json with output file paths
+    _update_progress_with_output(task_dir, paths)
+
     return paths

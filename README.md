@@ -77,6 +77,7 @@ python app.py "https://www.bilibili.com/video/BVxxx" --model large-v3 --language
 # 使用自定义 job-id 指定输出目录
 python app.py "https://www.youtube.com/watch?v=xxx" --job-id my-task-001
 # 输出将保存在 output/my-task-001/
+# 包含 progress.json 进度文件和结果文件
 ```
 
 ## 项目结构

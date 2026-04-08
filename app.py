@@ -261,7 +261,7 @@ def parse_cli_args():
 
 def run_cli(url: str, model_size: str, language: str, output_dir: Path | None, job_id: str | None):
     """Run video processing in CLI mode."""
-    for event in process_video(url, model_size, language):
+    for event in process_video(url, model_size, language, job_id=job_id, output_dir=output_dir):
         if isinstance(event, PipelineProgress):
             pct = int(event.percent * 100)
             print(f"[{pct:3d}%] {event.message}")
@@ -279,6 +279,7 @@ def run_cli(url: str, model_size: str, language: str, output_dir: Path | None, j
             ]:
                 if path:
                     print(f"    {name}: {path}")
+            print(f"\n进度文件: {paths.task_dir / 'progress.json'}")
 
 
 if __name__ == "__main__":
