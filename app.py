@@ -120,7 +120,7 @@ CUSTOM_CSS = """
 
 def build_ui() -> gr.Blocks:
     """Build the Gradio Blocks interface."""
-    with gr.Blocks(title="视频转文字工具") as demo:
+    with gr.Blocks(title="视频转文字工具", enable_monitoring=False) as demo:
         gr.Markdown("# 视频转文字工具\n支持抖音、B站、YouTube 视频链接，自动生成文字稿并总结内容")
 
         # --- Input Section ---

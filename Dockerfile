@@ -6,7 +6,8 @@ ARG WHISPER_COMPUTE_TYPE=int8
 
 # Prevent Python from writing .pyc and enable unbuffered output
 ENV PYTHONDONTWRITEBYTECODE=1 \
-    PYTHONUNBUFFERED=1
+    PYTHONUNBUFFERED=1 \
+    HF_HUB_DISABLE_TELEMETRY=1
 
 WORKDIR /app
 
@@ -19,6 +20,10 @@ RUN apt-get update && \
 # ── Stage 2: Python dependencies (cached layer) ────────────────────────
 COPY requirements.txt .
 RUN pip install --no-cache-dir -r requirements.txt
+
+# ── Stage 2.5: Pre-download static ffmpeg ──────────────────────────────
+# This avoids ~50MB download on each container start
+RUN python -c "import static_ffmpeg; static_ffmpeg.add_paths()"
 
 # ── Stage 3: Pre-download Whisper model ─────────────────────────────
 # This avoids ~1.5GB download on first run
