@@ -18,18 +18,19 @@ class TaskOutputPaths:
     summary_md: Path | None = None
 
 
-def save_task_output(result, output_dir: Path | None = None) -> TaskOutputPaths:
+def save_task_output(result, output_dir: Path | None = None, job_id: str | None = None) -> TaskOutputPaths:
     """Save all task results to output/<task_id>/ directory.
 
     Args:
         result: PipelineResult object with task_id and all content fields.
         output_dir: Override output base directory. Defaults to config.OUTPUT_DIR.
+        job_id: Optional custom job ID to use as directory name instead of result.task_id.
 
     Returns:
         TaskOutputPaths with paths to all written files.
     """
     base_dir = output_dir or config.OUTPUT_DIR
-    task_dir = base_dir / str(result.task_id)
+    task_dir = base_dir / str(job_id or result.task_id)
     task_dir.mkdir(parents=True, exist_ok=True)
 
     safe_name = safe_filename(result.title)

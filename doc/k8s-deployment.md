@@ -54,6 +54,7 @@ docker run --rm \
 | `--model` | Whisper 模型 (tiny/base/small/medium/large-v3) |
 | `--language` | 语言代码 (auto/zh/en/ja/ko) |
 | `--output-dir` | 输出目录（默认写入容器内 `/app/output`） |
+| `--job-id` | 自定义任务 ID，用于指定输出目录名称 |
 | `--api-key` | 覆盖 DASHSCOPE_API_KEY |
 
 ### 示例
@@ -73,7 +74,30 @@ docker run --rm \
   -v /host/output:/app/output \
   video-to-text:latest \
   python app.py "https://www.youtube.com/watch?v=xxx" \
+    --job-id my-task-001 \
     --output-dir /app/output
+```
+
+### 与调用方集成
+
+通过 `--job-id` 参数，调用方可以指定输出目录名称，便于获取任务结果：
+
+```bash
+docker run --rm \
+  -e DASHSCOPE_API_KEY=sk-xxx \
+  -v /host/output:/app/output \
+  video-to-text:latest \
+  python app.py "https://www.youtube.com/watch?v=xxx" \
+    --job-id "spring-boot-job-123" \
+    --output-dir /app/output
+```
+
+任务完成后，输出文件在：
+```
+/host/output/spring-boot-job-123/
+├── <视频标题>.md
+├── <视频标题>.txt
+└── ...
 ```
 
 ---
@@ -96,7 +120,7 @@ docker run --rm \
 
 ## k8s Deployment 示例
 
-### Deployment（CLI 任务模式）
+### Job（CLI 任务模式）
 
 推荐使用 **Job** 而非 Deployment 来执行一次性任务：
 
@@ -116,6 +140,8 @@ spec:
             - "https://www.youtube.com/watch?v=xxx"
             - "--model"
             - "medium"
+            - "--job-id"
+            - "spring-boot-job-123"
             - "--output-dir"
             - "/app/output"
           env:

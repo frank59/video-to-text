@@ -68,7 +68,16 @@ python app.py "https://www.bilibili.com/video/BVxxx" --model large-v3 --language
 | `--model` | Whisper 模型大小 (tiny/base/small/medium/large-v3) |
 | `--language` | 语言代码 (auto/zh/en/ja/ko) |
 | `--output-dir` | 输出目录 |
+| `--job-id` | 自定义任务 ID，用于指定输出目录名称 |
 | `--api-key` | 覆盖 DASHSCOPE_API_KEY 环境变量 |
+
+示例：
+
+```bash
+# 使用自定义 job-id 指定输出目录
+python app.py "https://www.youtube.com/watch?v=xxx" --job-id my-task-001
+# 输出将保存在 output/my-task-001/
+```
 
 ## 项目结构
 

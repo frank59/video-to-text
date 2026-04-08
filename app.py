@@ -216,7 +216,7 @@ def build_ui() -> gr.Blocks:
 
 
 def parse_cli_args():
-    """Parse command line arguments. Returns (url, model, language, output_dir, api_key)."""
+    """Parse command line arguments. Returns (url, model, language, output_dir, api_key, job_id)."""
     import argparse
 
     parser = argparse.ArgumentParser(
@@ -244,17 +244,22 @@ def parse_cli_args():
         "--output-dir",
         type=Path,
         default=None,
-        help="输出目录 (默认: output/<task_id>/)",
+        help="输出目录 (默认: output/<job_id>/)",
     )
     parser.add_argument(
         "--api-key",
         default=None,
         help="覆盖 DASHSCOPE_API_KEY 环境变量",
     )
+    parser.add_argument(
+        "--job-id",
+        default=None,
+        help="自定义任务 ID，用于指定输出目录名称",
+    )
     return parser.parse_args()
 
 
-def run_cli(url: str, model_size: str, language: str, output_dir: Path | None):
+def run_cli(url: str, model_size: str, language: str, output_dir: Path | None, job_id: str | None):
     """Run video processing in CLI mode."""
     for event in process_video(url, model_size, language):
         if isinstance(event, PipelineProgress):
@@ -262,8 +267,8 @@ def run_cli(url: str, model_size: str, language: str, output_dir: Path | None):
             print(f"[{pct:3d}%] {event.message}")
         elif isinstance(event, PipelineResult):
             print(f"\n处理完成: {event.title}")
-            print(f"任务 ID: {event.task_id}")
-            paths = save_task_output(event, output_dir=output_dir)
+            print(f"任务 ID: {job_id or event.task_id}")
+            paths = save_task_output(event, output_dir=output_dir, job_id=job_id)
             print("\n输出文件:")
             for name, path in [
                 ("  文字稿 (Markdown)", paths.transcript_md),
@@ -286,7 +291,7 @@ if __name__ == "__main__":
         if args.api_key:
             os.environ["DASHSCOPE_API_KEY"] = args.api_key
 
-        run_cli(args.url, args.model, args.language, args.output_dir)
+        run_cli(args.url, args.model, args.language, args.output_dir, args.job_id)
     else:
         # Web mode
         demo = build_ui()
