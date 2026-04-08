@@ -45,17 +45,36 @@ API Key 获取地址: https://dashscope.console.aliyun.com/
 
 ### 启动
 
+**Web 界面模式：**
+
 ```bash
 python app.py
 ```
 
 浏览器访问 http://localhost:7860
 
+**命令行模式：**
+
+```bash
+python app.py "https://www.youtube.com/watch?v=xxx"
+python app.py "https://www.bilibili.com/video/BVxxx" --model large-v3 --language zh
+```
+
+完整参数：
+
+| 参数 | 说明 |
+|------|------|
+| `url` | 视频链接（必填） |
+| `--model` | Whisper 模型大小 (tiny/base/small/medium/large-v3) |
+| `--language` | 语言代码 (auto/zh/en/ja/ko) |
+| `--output-dir` | 输出目录 |
+| `--api-key` | 覆盖 DASHSCOPE_API_KEY 环境变量 |
+
 ## 项目结构
 
 ```
 video-to-text/
-├── app.py                  # Gradio Web 应用入口
+├── app.py                  # 应用入口 (Web + CLI)
 ├── config.py               # 配置管理
 ├── requirements.txt        # Python 依赖
 ├── core/
