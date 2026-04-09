@@ -1,4 +1,4 @@
-FROM python:3.11-slim AS base
+FROM python:3.11.15-slim AS base
 
 # Build arguments
 ARG WHISPER_MODEL=medium
@@ -14,16 +14,13 @@ WORKDIR /app
 # ── Stage 1: System dependencies ────────────────────────────────────────
 RUN apt-get update && \
     apt-get install -y --no-install-recommends \
+        ffmpeg \
         curl \
     && rm -rf /var/lib/apt/lists/*
 
 # ── Stage 2: Python dependencies (cached layer) ────────────────────────
 COPY requirements.txt .
 RUN pip install --no-cache-dir -r requirements.txt
-
-# ── Stage 2.5: Pre-download static ffmpeg ──────────────────────────────
-# This avoids ~50MB download on each container start
-RUN python -c "import static_ffmpeg; static_ffmpeg.add_paths()"
 
 # ── Stage 3: Pre-download Whisper model ─────────────────────────────
 # This avoids ~1.5GB download on first run
